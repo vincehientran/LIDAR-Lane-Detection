@@ -19,28 +19,67 @@ def gps_to_ecef(lat, lon, alt):
 
     return x, y, z
 
+def ecef_enu(x, y, z, lat0, lon0, h0):
+    a = 6378137
+    b = 6356752.3142
+    f = (a - b) / a
+    e_sq = f * (2-f)
+
+    lamb = math.radians(lat0)
+    phi = math.radians(lon0)
+    s = math.sin(lamb)
+    N = a / math.sqrt(1 - e_sq * s * s)
+
+    sin_lambda = math.sin(lamb)
+    cos_lambda = math.cos(lamb)
+    sin_phi = math.sin(phi)
+    cos_phi = math.cos(phi)
+
+    x0 = (h0 + N) * cos_lambda * cos_phi
+    y0 = (h0 + N) * cos_lambda * sin_phi
+    z0 = (h0 + (1 - e_sq) * N) * sin_lambda
+
+    xd = x - x0
+    yd = y - y0
+    zd = z - z0
+
+    xEast = -sin_phi * xd + cos_phi * yd
+    yNorth = -cos_phi * sin_lambda * xd - sin_lambda * sin_phi * yd + cos_lambda * zd
+    zUp = cos_lambda * cos_phi * xd + cos_lambda * sin_phi * yd + sin_lambda * zd
+
+    return xEast, yNorth, zUp
+
 def run():
     filePoints = open('final_project_point_cloud.fuse','r')
     fileXYZ = open('test.pcd','a')
 
-    # plotting the points
-    pts = []
+    # convert lla to ecef
+    ecef_pts = []
     for pt in filePoints.readlines():
         lst = pt.split()
         point = gps_to_ecef(float(lst[0]), float(lst[1]), float(lst[2]))
-        #fileXYZ.write(str(point[0]) + ' ' + str(point[1]) + ' ' + str(point[2]) + ' ' + lst[-1] + '\n')
         intensity = int(lst[-1])
+        ecef_pts.append([point[0], point[1], point[2], float(lst[0]), float(lst[1]), float(lst[2]), intensity])
+
+    # convert ecef to enu
+    enu_pts = []
+    # supposed to be origin of point cloud, but earth is so big it doesnt matter much
+    center = ecef_pts[0]
+    lat0, lon0, alt0 = center[3:-1]
+    for pt in ecef_pts:
+        x, y, z = pt[:3]
+        intensity = pt[-1]
+        point = ecef_enu(x, y, z, lat0, lon0, alt0)
         if intensity > 20:
-            pts.append([point[0], point[1], point[2], 255, 0, 0])
+            enu_pts.append([point[0], point[1], point[2], 255, 0, 0])
         else:
-            pts.append([point[0], point[1], point[2], 0, 0, 0])
+            enu_pts.append([point[0], point[1], point[2], 0, 0, 0])
 
-
-    pts = np.array(pts)
-    #display(pts)
+    enu_pts = np.array(enu_pts)
+    #display(enu_pts)
 
     print('Find road plane.')
-    road_points(pts)
+    road_points(enu_pts)
 
     filePoints.close()
     fileXYZ.close()
@@ -146,8 +185,8 @@ def generate_lines_points(lines):
     for line in lines:
         unit_directing_vector = line[3:] / np.linalg.norm(line[3:])
         point_vector = line[:3]
-        for i in range(-300, 300):
-            point = point_vector + (i * unit_directing_vector)
+        for i in range(-6000, 6000):
+            point = point_vector + ((i/20) * unit_directing_vector)
             point = [point[0], point[1], point[2], 0, 255, 0]
             lane_line_points.append(point)
     lane_line_points = np.array(lane_line_points)
@@ -189,7 +228,7 @@ def display(points):
     xyz = points[:,:3]
     rgb = points[:,3:]
     v = pptk.viewer(xyz, rgb)
-    v.set(point_size=0.05)
+    v.set(point_size=0.005)
 
 if __name__ == '__main__':
     run()
