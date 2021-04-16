@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import pptk
+from sklearn.cluster import DBSCAN
 
 def gps_to_ecef(lat, lon, alt):
     rad_lat = lat * (math.pi / 180.0)
@@ -36,19 +37,15 @@ def run():
 
 
     pts = np.array(pts)
-    xyz = pts[:,:3]
-    rgb = pts[:,3:]
-    v = pptk.viewer(xyz, rgb)
-    v.set(point_size=0.05)
+    #display(pts)
 
-    print('Start finding road plane.')
+    print('Find road plane.')
     road_points(pts)
 
     filePoints.close()
     fileXYZ.close()
 
 def road_points(pts):
-
     threshold = 0.2
     bestPlane = None
     bestPlaneFitPoints = 0
@@ -76,10 +73,70 @@ def road_points(pts):
             roadPts.append(pt)
 
     roadPts = np.array(roadPts)
-    xyz = roadPts[:,:3]
-    rgb = roadPts[:,3:]
-    v = pptk.viewer(xyz, rgb)
-    v.set(point_size=0.05)
+    #display(roadPts)
+    lane_candidates(roadPts)
+
+def lane_candidates(roadPts):
+    points = []
+    for pt in roadPts:
+        # if the pt R value is not 0
+        if pt[3] > 0:
+            points.append(pt)
+    points = np.array(points)
+    #display(points)
+
+    lane_points(points)
+
+def lane_points(pts):
+    print('Find lane lines.')
+    threshold = 0.3
+
+    lane_lines = []
+    remaining_pts = np.copy(pts)
+    total_pts = len(pts)
+
+    # if each lane has more than 2% of the total points, continue finding lanes
+    counter = 0
+    bestLineFitPoints = total_pts
+    while bestLineFitPoints > total_pts*0.02:
+        bestLine = None
+        bestLineFitPoints = 0
+        for _ in range(200):
+            # find the line equation
+            points = remaining_pts[np.random.randint(remaining_pts.shape[0], size=2), :]
+            line = lineEquation(points)
+
+            fitPoints = 0
+            for pt in remaining_pts[::5]:
+                distance = distance_point_line(line, pt)
+                if distance < threshold:
+                    fitPoints += 1
+
+            if fitPoints > bestLineFitPoints:
+                bestLine = line
+                bestLineFitPoints = fitPoints
+
+        lane_lines.append(bestLine)
+        counter += 1
+        print('Found',counter,'line(s).')
+
+        p = []
+        for pt in remaining_pts:
+            distance = distance_point_line(bestLine, pt)
+            if distance > threshold:
+                p.append(pt)
+
+        remaining_pts = np.array(p)
+
+    # extract the points that belong to the lane markings
+    lane_pts = []
+    for line in lane_lines:
+        for pt in pts:
+            distance = distance_point_line(line, pt)
+            if distance < threshold:
+                lane_pts.append(pt)
+    lane_pts = np.array(lane_pts)
+    display(lane_pts)
 
 
 def planeEquation(points):
@@ -94,13 +151,31 @@ def planeEquation(points):
 
     return plane
 
+def lineEquation(points):
+    line = [points[0,0], points[0,1], points[0,2], points[1,0]-points[0,0], points[1,1]-points[0,1], points[1,2]-points[0,2]]
+    line = np.array(line)
+    return line
+
 def distance_point_plane(plane, point):
     numerator = abs((plane[0] * point[0]) + (plane[1] * point[1]) + (plane[2] * point[2]) + plane[3])
     denominator = math.sqrt((plane[0]**2) + (plane[1]**2) + (plane[2]**2))
 
     return numerator/denominator
 
+def distance_point_line(line, point):
+    directing_vector = line[3:]
+    point_vector = line[:3]
+    vector_diff = point_vector - point[:3]
+    numerator = np.linalg.norm(np.cross(vector_diff, directing_vector))
+    denominator = np.linalg.norm(directing_vector)
 
+    return numerator/denominator
+
+def display(points):
+    xyz = points[:,:3]
+    rgb = points[:,3:]
+    v = pptk.viewer(xyz, rgb)
+    v.set(point_size=0.05)
 
 if __name__ == '__main__':
     run()
