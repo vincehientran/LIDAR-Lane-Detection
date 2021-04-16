@@ -70,14 +70,11 @@ def run():
         x, y, z = pt[:3]
         intensity = pt[-1]
         point = ecef_enu(x, y, z, lat0, lon0, alt0)
-        if intensity > 20:
-            enu_pts.append([point[0], point[1], point[2], 255, 0, 0])
-        else:
-            enu_pts.append([point[0], point[1], point[2], 0, 0, 0])
+        enu_pts.append([point[0], point[1], point[2], intensity*10, intensity*10, intensity*10, intensity*10, intensity*10, intensity*10])
 
     enu_pts = np.array(enu_pts)
-    #display(enu_pts)
 
+    print('all points:',len(enu_pts))
     print('Find road plane.')
     road_points(enu_pts)
 
@@ -89,14 +86,14 @@ def road_points(pts):
     bestPlane = None
     bestPlaneFitPoints = 0
 
-    for _ in range(50):
+    for _ in range(100):
 
         # find the plane equation
         points = pts[np.random.randint(pts.shape[0], size=3), :]
         plane = planeEquation(points)
 
         fitPoints = 0
-        for pt in pts[::5]:
+        for pt in pts[::30]:
             distance = distance_point_plane(plane, pt)
             if distance < threshold:
                 fitPoints += 1
@@ -105,48 +102,59 @@ def road_points(pts):
             bestPlane = plane
             bestPlaneFitPoints = fitPoints
 
-    roadPts = []
+    plane_points = []
+    non_plane_points = []
     for pt in pts:
         distance = distance_point_plane(bestPlane, pt)
         if distance < threshold:
-            roadPts.append(pt)
+            plane_points.append(pt)
+        else:
+            non_plane_points.append([pt[0], pt[1], pt[2], 255, 255, 255, pt[6], pt[7], pt[8]])
 
-    roadPts = np.array(roadPts)
-    #display(roadPts)
-    lane_candidates(roadPts, pts)
+    plane_points = np.array(plane_points)
+    non_plane_points = np.array(non_plane_points)
+    #display(plane_points)
+    print('plane points:',len(plane_points))
+    print('non plane points:',len(non_plane_points))
+    lane_candidates(plane_points, pts, non_plane_points)
 
-def lane_candidates(roadPts, all_pts):
-    points = []
-    for pt in roadPts:
+def lane_candidates(plane_points, all_pts, non_plane_points):
+    lane_candidate_points = []
+    non_lane_plane_points = []
+    for pt in plane_points:
         # if the pt R value is not 0
-        if pt[3] > 0:
-            points.append(pt)
-    points = np.array(points)
-    #display(points)
+        if pt[3] > 200:
+            lane_candidate_points.append(pt)
+        else:
+            non_lane_plane_points.append([pt[0], pt[1], pt[2], 20, 75, 20, pt[6], pt[7], pt[8]])
+    lane_candidate_points = np.array(lane_candidate_points)
+    non_lane_plane_points = np.array(non_lane_plane_points)
+    #display(non_lane_plane_points)
+    print('lane candidate points:',len(lane_candidate_points))
+    print('non lane plane points:',len(non_lane_plane_points))
+    lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane_points)
 
-    lane_points(points, all_pts)
-
-def lane_points(pts, all_pts):
+def lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane_points):
     print('Find lane lines.')
     threshold = 0.3
 
     lane_lines = []
-    remaining_pts = np.copy(pts)
-    total_pts = len(pts)
+    remaining_pts = np.copy(lane_candidate_points)
+    total_pts = len(lane_candidate_points)
 
-    # if each lane has more than 2% of the total points, continue finding lanes
+    # if each lane has more than 0.25% of the total points, continue finding lanes
     counter = 0
     bestLineFitPoints = total_pts
-    while bestLineFitPoints > total_pts*0.02:
+    while bestLineFitPoints > total_pts*0.0025:
         bestLine = None
         bestLineFitPoints = 0
-        for _ in range(200):
+        for _ in range(400):
             # find the line equation
             points = remaining_pts[np.random.randint(remaining_pts.shape[0], size=2), :]
             line = lineEquation(points)
 
             fitPoints = 0
-            for pt in remaining_pts[::5]:
+            for pt in remaining_pts[::20]:
                 distance = distance_point_line(line, pt)
                 if distance < threshold:
                     fitPoints += 1
@@ -168,16 +176,94 @@ def lane_points(pts, all_pts):
         remaining_pts = np.array(p)
 
     # extract the points that belong to the lane markings
-    lane_pts = []
+    non_lane_points = []
+    lane_points = []
+    remaining_pts = np.copy(lane_candidate_points)
     for line in lane_lines:
-        for pt in pts:
+        new_remaining = []
+        for pt in remaining_pts:
             distance = distance_point_line(line, pt)
-            if distance < threshold:
-                lane_pts.append(pt)
-    lane_pts = np.array(lane_pts)
-    subset_pts = all_pts[:]
+            if distance > threshold:
+                new_remaining.append(pt)
+            else:
+                lane_points.append([pt[0], pt[1], pt[2], 255, 0, 255, pt[6], pt[7], pt[8]])
+        remaining_pts = np.array(new_remaining)
+    lane_points = np.array(lane_points)
+    #display(lane_points)
+    non_lane_points = []
+    for pt in remaining_pts:
+        non_lane_points.append([pt[0], pt[1], pt[2], 255, 255, 255, pt[6], pt[7], pt[8]])
+    non_lane_points = np.array(non_lane_points)
+
     lane_line_points = generate_lines_points(lane_lines)
-    result = np.concatenate((subset_pts, lane_line_points), axis=0)
+    print('lane points:',len(lane_points))
+    print('non lane points:',len(non_lane_points))
+    guardrail_points, noise = guardrails(non_plane_points)
+    display_result(guardrail_points, noise , non_lane_plane_points, non_lane_points, lane_points, lane_line_points)
+
+def guardrails(non_plane_points):
+    threshold = 1
+
+    guard_lines = []
+    remaining_pts = np.copy(non_plane_points)
+
+    # find two guardrails
+    for counter in range(2):
+        bestLine = None
+        bestLineFitPoints = 0
+        for _ in range(400):
+            # find the line equation
+            points = remaining_pts[np.random.randint(remaining_pts.shape[0], size=2), :]
+            line = lineEquation(points)
+
+            fitPoints = 0
+            for pt in remaining_pts[::100]:
+                distance = distance_point_line(line, pt)
+                if distance < threshold:
+                    fitPoints += 1
+
+            if fitPoints > bestLineFitPoints:
+                bestLine = line
+                bestLineFitPoints = fitPoints
+
+        guard_lines.append(bestLine)
+        print('Found',counter+1,'line(s).')
+
+        p = []
+        for pt in remaining_pts:
+            distance = distance_point_line(bestLine, pt)
+            if distance > threshold:
+                p.append(pt)
+
+        remaining_pts = np.array(p)
+
+    # extract the points that belong to the lane markings
+    guardrail_points = []
+    remaining_pts = np.copy(non_plane_points)
+    for line in guard_lines:
+        new_remaining = []
+        for pt in remaining_pts:
+            distance = distance_point_line(line, pt)
+            if distance > threshold:
+                new_remaining.append(pt)
+            else:
+                guardrail_points.append([pt[0], pt[1], pt[2], 255, 0, 0, pt[6], pt[7], pt[8]])
+        remaining_pts = np.array(new_remaining)
+    guardrail_points = np.array(guardrail_points)
+    #display(lane_points)
+    noise = []
+    for pt in remaining_pts:
+        noise.append([pt[0], pt[1], pt[2], 255, 255, 255, pt[6], pt[7], pt[8]])
+    noise = np.array(noise)
+
+    return guardrail_points, noise
+
+def display_result(guardrail_points, noise, non_lane_plane_points, non_lane_points, lane_points, lane_line_points):
+    result = np.concatenate((guardrail_points, noise), axis=0)
+    result = np.concatenate((result, non_lane_plane_points), axis=0)
+    result = np.concatenate((result, non_lane_points), axis=0)
+    result = np.concatenate((result, lane_points), axis=0)
+    result = np.concatenate((result, lane_line_points), axis=0)
     display(result)
 
 def generate_lines_points(lines):
@@ -185,9 +271,9 @@ def generate_lines_points(lines):
     for line in lines:
         unit_directing_vector = line[3:] / np.linalg.norm(line[3:])
         point_vector = line[:3]
-        for i in range(-6000, 6000):
+        for i in range(-3000, 3000):
             point = point_vector + ((i/20) * unit_directing_vector)
-            point = [point[0], point[1], point[2], 0, 255, 0]
+            point = [point[0], point[1], point[2], 0, 255, 0, 0, 0, 0]
             lane_line_points.append(point)
     lane_line_points = np.array(lane_line_points)
     return lane_line_points
@@ -226,9 +312,15 @@ def distance_point_line(line, point):
 
 def display(points):
     xyz = points[:,:3]
-    rgb = points[:,3:]
-    v = pptk.viewer(xyz, rgb)
+    rgb = points[:,3:6]/255
+    intensity_attribute = points[:,6:]/255
+    v = pptk.viewer(xyz)
     v.set(point_size=0.005)
+    v.attributes(rgb, intensity_attribute)
+    v.set(bg_color = [0,0,0,1])
+    v.set(show_grid = False)
+    v.set(show_info = False)
+    v.set(show_axis = False)
 
 if __name__ == '__main__':
     run()
