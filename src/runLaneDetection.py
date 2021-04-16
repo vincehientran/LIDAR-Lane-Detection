@@ -74,9 +74,9 @@ def road_points(pts):
 
     roadPts = np.array(roadPts)
     #display(roadPts)
-    lane_candidates(roadPts)
+    lane_candidates(roadPts, pts)
 
-def lane_candidates(roadPts):
+def lane_candidates(roadPts, all_pts):
     points = []
     for pt in roadPts:
         # if the pt R value is not 0
@@ -85,9 +85,9 @@ def lane_candidates(roadPts):
     points = np.array(points)
     #display(points)
 
-    lane_points(points)
+    lane_points(points, all_pts)
 
-def lane_points(pts):
+def lane_points(pts, all_pts):
     print('Find lane lines.')
     threshold = 0.3
 
@@ -136,8 +136,22 @@ def lane_points(pts):
             if distance < threshold:
                 lane_pts.append(pt)
     lane_pts = np.array(lane_pts)
-    display(lane_pts)
+    subset_pts = all_pts[:]
+    lane_line_points = generate_lines_points(lane_lines)
+    result = np.concatenate((subset_pts, lane_line_points), axis=0)
+    display(result)
 
+def generate_lines_points(lines):
+    lane_line_points = []
+    for line in lines:
+        unit_directing_vector = line[3:] / np.linalg.norm(line[3:])
+        point_vector = line[:3]
+        for i in range(-300, 300):
+            point = point_vector + (i * unit_directing_vector)
+            point = [point[0], point[1], point[2], 0, 255, 0]
+            lane_line_points.append(point)
+    lane_line_points = np.array(lane_line_points)
+    return lane_line_points
 
 def planeEquation(points):
     vector1 = points[0,:3] - points[1,:3]
