@@ -199,7 +199,8 @@ def lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane
     print('lane points:',len(lane_points))
     print('non lane points:',len(non_lane_points))
     guardrail_points, noise = guardrails(non_plane_points)
-    display_result(guardrail_points, noise , non_lane_plane_points, non_lane_points, lane_points, lane_line_points)
+    pole_points = pole(noise)
+    display_result(guardrail_points, noise , non_lane_plane_points, non_lane_points, lane_points, lane_line_points, pole_points)
 
 def guardrails(non_plane_points):
     threshold = 1
@@ -258,12 +259,41 @@ def guardrails(non_plane_points):
 
     return guardrail_points, noise
 
-def display_result(guardrail_points, noise, non_lane_plane_points, non_lane_points, lane_points, lane_line_points):
+def pole(points):
+    min_x = np.min(points[:,0])
+    min_y = np.min(points[:,1])
+    max_x = np.max(points[:,0])
+    max_y = np.max(points[:,1])
+
+    width = int((max_x - min_x) * 10)
+    height = int((max_y - min_y) * 10)
+
+    votes = np.zeros((height+1,width+1))
+
+    for pt in points:
+        x, y = pt[:2]
+        x, y = x - min_x, y - min_y
+        votes[int(y*10)][int(x*10)] += 1
+
+    pole_lines = []
+    max_votes = np.amax(votes)
+
+    for i in range(len(votes)):
+        for j in range(len(votes[0])):
+            if votes[i][j] > max_votes*0.5:
+                pole_lines.append([(j/10) + min_x, (i/10) + min_y, 0, 0, 0, 1])
+
+    pole_line_points = generate_lines_points(pole_lines)
+    print(len(pole_lines))
+    return pole_line_points
+
+def display_result(guardrail_points, noise, non_lane_plane_points, non_lane_points, lane_points, lane_line_points, pole_points):
     result = np.concatenate((guardrail_points, noise), axis=0)
     result = np.concatenate((result, non_lane_plane_points), axis=0)
     result = np.concatenate((result, non_lane_points), axis=0)
     result = np.concatenate((result, lane_points), axis=0)
     result = np.concatenate((result, lane_line_points), axis=0)
+    result = np.concatenate((result, pole_points), axis=0)
     display(result)
 
 def generate_lines_points(lines):
