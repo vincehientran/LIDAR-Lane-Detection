@@ -1,7 +1,6 @@
 import numpy as np
 import math
 import pptk
-from sklearn.cluster import DBSCAN
 
 def gps_to_ecef(lat, lon, alt):
     rad_lat = lat * (math.pi / 180.0)
