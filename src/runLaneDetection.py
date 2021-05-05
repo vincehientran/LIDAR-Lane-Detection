@@ -1,7 +1,6 @@
 import numpy as np
 import math
 import pptk
-from sklearn.cluster import DBSCAN
 
 def gps_to_ecef(lat, lon, alt):
     rad_lat = lat * (math.pi / 180.0)
@@ -210,6 +209,9 @@ def lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane
     display_result(guardrail_points, noise , non_lane_plane_points, non_lane_points, lane_points, lane_line_points, pole_points)
 
 def guardrails(non_plane_points):
+    # bypass guardrail detection. remove this line for guardrail detection.
+    return non_plane_points[0:1], non_plane_points[1:]
+
     threshold = 1
 
     guard_lines = []
@@ -267,6 +269,9 @@ def guardrails(non_plane_points):
     return guardrail_points, noise
 
 def pole(points):
+    # bypass guardrail detection. remove this line for pole detection
+    return points[0:1], points[1:]
+
     min_x = np.min(points[:,0])
     min_y = np.min(points[:,1])
     max_x = np.max(points[:,0])
