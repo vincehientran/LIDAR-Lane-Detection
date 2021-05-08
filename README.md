@@ -24,4 +24,6 @@ $ python runLaneDetection.py
 
 ## Output
 
-pptk will automatically open with the visualization of the detected lanes
+pptk will automatically open with the visualization of the detected lanes  
+<img src="result/original.jpg" align="left" height="320" width="240">
+<img src="result/final_result.jpg" align="left" height="320" width="240">  
