@@ -80,7 +80,7 @@ def run():
     filePoints.close()
 
 def road_points(pts):
-    threshold = 0.22
+    threshold = 0.25
     bestPlane = None
     bestPlaneFitPoints = 0
 
@@ -133,7 +133,7 @@ def lane_candidates(plane_points, all_pts, non_plane_points):
     lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane_points)
 
 def lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane_points):
-    print('Find lane lines.')
+    print('Find lane lines.\n\n')
     threshold = 0.3
 
     lane_lines = []
@@ -172,6 +172,7 @@ def lane_points(lane_candidate_points, all_pts, non_plane_points, non_lane_plane
         lane_lines.append(bestLine)
         counter += 1
         print('Found',counter,'lane line(s). (',bestLineFitPoints,'points fitted )')
+        print('r = <' + str(round(bestLine[0], 2)) + ', ' + str(round(bestLine[1], 2)) + ', ' + str(round(bestLine[2], 2)) + '> + t<' + str(round(bestLine[3], 2)) + ', ' + str(round(bestLine[4], 2)) + ', ' + str(round(bestLine[5], 2)) + '>\n')
 
         p = []
         for pt in remaining_pts:
