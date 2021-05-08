@@ -1,6 +1,6 @@
 # LIDAR Lane Detection
 
-Vincent Tran [A20396585]  
+Vincent Tran  
   
 Project explanation can be found in the [presentation](docs/LIDAR%20Lane%20Detection.pdf).
 
